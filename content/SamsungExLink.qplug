@@ -1,0 +1,2853 @@
+-- Samsung consumer ExLink - Joshua Small - 10/2026
+-- Based on Samsung-RS232-Control.pdf. No device-state queries are documented.
+PluginInfo = {
+  Name = "Samsung~Consumer ExLink",
+  Version = "1.1.0.0",
+  BuildVersion = "1.1.0.0",
+  Id = "053da5a0-922c-4d94-a662-5241818076d6",
+  Author = "Joshua Small",
+  Manufacturer = "Samsung",
+  Model = "Consumer ExLink",
+  Description = "Consumer ExLink over Serial or optional raw TCP, including Frame Art Mode. Command-only state; model-dependent TCP support.",
+}
+
+--*** Command definitions: Cmd1, Cmd2, Cmd3, Value ***
+CommandDefinitions = {
+  { "PowerOn", "Power On", "Power", { 0x00, 0x00, 0x00, 0x02 }, true },
+  { "PowerOff", "Power Off", "Power", { 0x00, 0x00, 0x00, 0x01 } },
+  { "PowerToggle", "Power Toggle", "Power", { 0x00, 0x00, 0x00, 0x00 }, true },
+  { "VolumeUp", "Volume Up", "Audio", { 0x01, 0x00, 0x01, 0x00 } },
+  { "VolumeDown", "Volume Down", "Audio", { 0x01, 0x00, 0x02, 0x00 } },
+  { "MuteToggle", "Mute Toggle", "Audio", { 0x02, 0x00, 0x00, 0x00 } },
+  { "Hdmi1", "HDMI 1", "Input", { 0x0A, 0x00, 0x05, 0x00 } },
+  { "Hdmi2", "HDMI 2", "Input", { 0x0A, 0x00, 0x05, 0x01 } },
+  { "Hdmi3", "HDMI 3", "Input", { 0x0A, 0x00, 0x05, 0x02 } },
+  { "Hdmi4", "HDMI 4", "Input", { 0x0A, 0x00, 0x05, 0x03 } },
+  { "ArtOn", "Art Mode On", "Frame", { 0x0B, 0x0B, 0x0E, 0x01 } },
+  { "ArtOff", "Art Mode Off", "Frame", { 0x0B, 0x0B, 0x0E, 0x00 } },
+  { "AmbientOn", "Ambient Mode On", "Frame", { 0x0B, 0x0B, 0x10, 0x01 } },
+  { "AmbientOff", "Ambient Mode Off", "Frame", { 0x0B, 0x0B, 0x10, 0x00 } },
+  { "ChannelUp", "Channel Up", "Remote", { 0x03, 0x00, 0x01, 0x00 } },
+  { "ChannelDown", "Channel Down", "Remote", { 0x03, 0x00, 0x02, 0x00 } },
+}
+KeyDefinitions = {
+  { "Source", 0x01 },
+  { "Sleep", 0x03 },
+  { "1", 0x04 },
+  { "2", 0x05 },
+  { "3", 0x06 },
+  { "4", 0x08 },
+  { "5", 0x09 },
+  { "6", 0x0A },
+  { "7", 0x0C },
+  { "8", 0x0D },
+  { "9", 0x0E },
+  { "0", 0x11 },
+  { "Previous Channel", 0x13 },
+  { "Green", 0x14 },
+  { "Yellow", 0x15 },
+  { "Blue", 0x16 },
+  { "Menu", 0x1A },
+  { "TV (1B)", 0x1B },
+  { "Info", 0x1F },
+  { "Minus", 0x23 },
+  { "Caption", 0x25 },
+  { "Teletext Mix", 0x2C },
+  { "Exit", 0x2D },
+  { "Enter", 0x2E },
+  { "E-Manual", 0x3F },
+  { "Stop", 0x46 },
+  { "Play", 0x47 },
+  { "Record", 0x49 },
+  { "Pause", 0x4A },
+  { "Tools", 0x4B },
+  { "Guide", 0x4F },
+  { "Return", 0x58 },
+  { "Subtitle", 0x59 },
+  { "Up", 0x60 },
+  { "Down", 0x61 },
+  { "Right", 0x62 },
+  { "Left", 0x65 },
+  { "Channel List", 0x6B },
+  { "Red", 0x6C },
+  { "Home", 0x76 },
+  { "Smart Hub", 0x79 },
+  { "TV (7D)", 0x7D },
+  { "HDMI", 0x8B },
+  { "Page Left", 0xA8 },
+  { "Page Right", 0xA9 },
+}
+RemoteButtons = {
+  { "Up", "Up" },
+  { "Down", "Down" },
+  { "Left", "Left" },
+  { "Right", "Right" },
+  { "Enter", "Enter" },
+  { "Home", "Home" },
+  { "SmartHub", "Smart Hub" },
+  { "Menu", "Menu" },
+  { "Return", "Return" },
+  { "Exit", "Exit" },
+  { "Play", "Play" },
+  { "Pause", "Pause" },
+  { "Stop", "Stop" },
+  { "Red", "Red" },
+  { "Green", "Green" },
+  { "Yellow", "Yellow" },
+  { "Blue", "Blue" },
+}
+InputDefinitions = { { "TV", 0, 0 } }
+for _, family in ipairs({
+  { "AV", 1, 3 },
+  { "S-Video", 2, 3 },
+  { "Component", 3, 3 },
+  { "PC", 4, 3 },
+  { "HDMI", 5, 4 },
+  { "DVI", 6, 3 },
+}) do
+  for index = 1, family[3] do
+    table.insert(InputDefinitions, { family[1] .. " " .. index, family[2], index - 1 })
+  end
+end
+table.insert(InputDefinitions, { "RVU", 7, 0 })
+PictureModes =
+  { "Dynamic", "Standard", "Movie", "Natural", "CAL-NIGHT", "CAL-DAY", "BD Wise", "Relax" }
+SoundModes = { "Standard", "Music", "Movie", "Clear Voice", "Amplify", "Optimized" }
+
+--*** Native presentation constants ***
+White = { 255, 255, 255 }
+Black = { 0, 0, 0 }
+PanelGray = { 230, 230, 230 }
+ReadoutGray = { 194, 194, 194 }
+OutlineGray = { 128, 128, 128 }
+IndicatorGreen = { 0, 160, 0 }
+PageWidth = 400
+PageHeights = { 690, 680, 660 }
+SamsungBlue = { 20, 40, 160 }
+LogoSvg =
+  "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iTGF5ZXJfMiIgZGF0YS1uYW1lPSJMYXllciAyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2MjguMjM3OCAxNjYuODg0OCI+CiAgPGRlZnM+CiAgICA8c3R5bGU+CiAgICAgIC5jbHMtMSB7CiAgICAgICAgZmlsbDogbm9uZTsKICAgICAgfQoKICAgICAgLmNscy0yIHsKICAgICAgICBmaWxsOiAjMTQyOGEwOwogICAgICB9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8ZyBpZD0iTGF5ZXJfMS0yIiBkYXRhLW5hbWU9IkxheWVyIDEiPgogICAgPGcgaWQ9ImxvZ28iPgogICAgICA8cmVjdCBpZD0iY2FudmFzIiBjbGFzcz0iY2xzLTEiIHdpZHRoPSI2MjguMjM3OCIgaGVpZ2h0PSIxNjYuODg0OCIvPgogICAgICA8cGF0aCBpZD0idGV4dCIgY2xhc3M9ImNscy0yIiBkPSJNNjIuNDIwNyw2NC4yODY1Yy0uMzc3MS0xLjU2OTEtLjI4ODktMy4yMjY2LS4wNzkxLTQuMDkwMS41MzIyLTIuNDgxNCwyLjIxNjgtNS4yNDg0LDcuMTI4LTUuMjQ4NCw0LjU1NTMsMCw3LjIzNzMsMi44MzA4LDcuMjM3Myw3LjA3Mjl2NC44MTk5aDE5LjQyNTN2LTUuNDcwNGMwLTE2Ljk0MTEtMTUuMjc0NS0xOS42NDE0LTI2LjI4NTUtMTkuNjQxNC0xMy44MzMxLDAtMjUuMTM2Miw0LjU5MTctMjcuMjA0MSwxNy4zMDg4LS41NjU1LDMuNDkwOS0uNjYyNiw2LjU2MjUuMTU1MSwxMC40OTcyLDMuMzcyNiwxNS45MjIyLDMxLjA1MDYsMjAuNTI2MSwzNS4wNzY5LDMwLjYwMDcuNzU0MiwxLjg3My41MjU5LDQuMjc4NS4xNTIsNS43NTA0LS42Mzg3LDIuNjE4Mi0yLjM5NjIsNS4yNjA2LTcuNjA1NCw1LjI2MDYtNC44NjU0LDAtNy43NzUzLTIuODMzOS03Ljc3NTMtNy4wOTEybC0uMDI3NS03LjQ5M2gtMjAuODk3MnY1Ljk1NDFjMCwxNy40MTIyLDEzLjY3NDksMjIuNjQ4OCwyOC4zMTA4LDIyLjY0ODgsMTQuMDcwNCwwLDI1LjYyNTctNC43OTU3LDI3LjUxMTEtMTcuODI4OC45MzY3LTYuNzE3Ni4yMzQyLTExLjA5MDEtLjA4MjItMTIuNzQ3Ni0zLjI4Ny0xNi4zNDQ4LTMyLjgyMzQtMjEuMTg2LTM1LjA0MDItMzAuMzAyNVpNMzE1LjY5NDE5MjU5NTgsNjQuNDc4Yy0uMzQ2NTk5OTkxMi0xLjUzODUtLjI0NjI5OTk5MzgtMy4xNzE4LS4wNjY5OTk5OTgzLTQuMDI2Mi41NTY0OTk5ODU5LTIuNDkzMywyLjIzMjA5OTk0MzYtNS4yMTIsNy4wNTc4OTk4MjE3LTUuMjEyLDQuNDk3NzA3NTgwOCwwLDcuMTM0Mjk5ODE5OCwyLjgwMzcsNy4xMzQyOTk4MTk4LDcuMDEyNHY0Ljc2MjFoMTkuMjAwMDk5NTE1di01LjQyODFjMC0xNi43Nzk4LTE1LjA0MzM5OTYyLTE5LjQxNjMtMjUuOTM1Nzk5MzQ0OC0xOS40MTYzLTEzLjcxNzU5OTY1MzUsMC0yNC45MjAzOTkzNzA1LDQuNTIyLTI2Ljk2Njc5OTMxODgsMTcuMTQ3OC0uNTQxMTk5OTg2MywzLjQzNjItLjY3NTA5MzA5MDQsNi40ODYyLjE4NTU5OTk5NTMsMTAuMzc4NiwzLjMzNTg5OTkxNTcsMTUuNzQyNSwzMC43NDMzMDY5MTQzLDIwLjMxLDM0LjcyMDk5OTEyMjksMzAuMjY2LjcwMjQ5OTk4MjMsMS44ODU0LjUwMTU5OTk4NzMsNC4yOTA2LjE0Mjg5OTk5NjQsNS43MDc3LS41OTU5OTk5ODQ5LDIuNTkxMS0yLjMzODQ5OTk0MDksNS4xOTcxLTcuNTA1MDk5ODEwNCw1LjE5NzEtNC44NDY5OTk4Nzc2LDAtNy43NjM0OTIzOTQ2LTIuNzg1Ny03Ljc2MzQ5MjM5NDYtNi45ODUxbC0uMDA1OTA3NDA5Mi03LjQ3NDVoLTIwLjY2NTg5OTQ3Nzl2NS45NDE5YzAsMTcuMjE0NCwxMy40ODMzOTk2NTk0LDIyLjQwODQsMjguMDA2NTk5MjkyNSwyMi40MDg0LDEzLjkwODk5OTY0ODYsMCwyNS4zOTc2OTkzNTg0LTQuNzUzLDI3LjI0MDQ5OTMxMTgtMTcuNjM3My44Nzg3MDgyODI4LTYuNjU2Ni4yMTU3OTk5OTQ1LTEwLjk5MjctLjEzNjk5OTk5NjUtMTIuNjI1Ni0zLjIyMDM5OTkxODYtMTYuMTQ3My0zMi40MzEwOTkxODA3LTIxLjAwMzctMzQuNjQxODk5MTI0OS0zMC4wMTY5Wk00OTIuNTMxOCwxMDYuOTEwOWwtMTguMzM5ODExNDA4Mi02Mi43MDA1aC0yOC45MDA1OTkyNjk5djc3LjA2NTVoMTkuMTE3OTk5NTE3bC0xLjEwOTc5OTk3Mi02NC43MDcxLDE5LjY5NTg5OTUwMjQsNjQuNzA3MWgyNy43MTc1OTkyOTk4VjQ0LjIxMDRoLTE5LjI0Mjc5OTUxMzlsMS4wNjE1MTE4NDQ2LDYyLjcwMDVaTTEyNS4wOTY1OTc0MTA3LDQ0LjIxMDRsLTE0LjQyNTk5NzQxMDcsNzcuODc3NmgyMS4wMzcwOTcyNDM3bDEwLjg3MTE5OTcyNTQtNzIuMDkzOSwxMC42MDk1OTk3MzIsNzIuMDkzOWgyMC44OTA5OTk0NzIybC0xNC4zNjUyOTk2MzcxLTc3Ljg3NzZoLTM0LjYxNzU5OTEyNTVaTTI0Mi43Mjc4LDQ0LjIxMDRsLTkuODI1MjA1MzEyNyw2MC44NzU4LTkuODE4OTk5NzUyLTYwLjg3NThoLTMxLjc3MTE5OTE5NzRsLTEuNjg0Njk5OTU3NCw3Ny44Nzc2aDE5LjQ2NDU5OTUwODNsLjUyNjI5OTk4NjctNzIuMDkzOSwxMy4zOTIwOTk2NjE3LDcyLjA5MzloMTkuNzQ3NTk5NTAxMWwxMy40MDQzOTk2NjE0LTcyLjA5MzkuNTI4OTk5OTg2Niw3Mi4wOTM5aDE5LjUxMzQ5OTUwN2wtMS43NDI1OTk5NTYtNzcuODc3NmgtMzEuNzM0NzkzNjM3NFpNNDIzLjY5Nzg4OTg2NzQsNDQuMjEwNGgtMTkuNjk1ODk5NTAyNHY1Ny42MTNjLjAzMDQ5OTk5OTIsMS4wMDMzLDAsMi4xMzE1LS4xNzM0OTk5OTU2LDIuOTU4OC0uNDEwMzk5OTg5NiwxLjkzNDEtMi4wNDk0OTk5NDgyLDUuNjU2MS03LjQ4MzU5OTgxMDksNS42NTYxLTUuMzYzODk5ODY0NSwwLTcuMDQ1Njk5ODIyLTMuNzIyLTcuNDI1ODk5ODEyNC01LjY1NjEtLjE5NzQ5OTk5NS0uODI3My0uMjIxNzk5OTk0NC0xLjk1NTUtLjE5NzQ5OTk5NS0yLjk1ODh2LTU3LjYxM2gtMTkuNjg5OTk5NTAyNnY1NS44MjQ3Yy0uMDI0Mjk5OTk5NCwxLjQzODYuMDg4MDk5OTk3OCw0LjM3OTEuMTczNDk5OTk1Niw1LjE0ODUsMS4zNTkxOTk5NjU3LDE0LjU0NzUsMTIuODIzNTk5Njc2LDE5LjI3LDI3LjEzOTg5OTMxNDQsMTkuMjcsMTQuMzQ0MDk5NjM3NiwwLDI1LjgwMTk5OTM0ODItNC43MjI1LDI3LjE4NTc5OTMxMzItMTkuMjcuMTA5Mjk5OTk3Mi0uNzY5NC4yNTIxOTk5OTM2LTMuNzA5OS4xNjcxOTk5OTU4LTUuMTQ4NXYtNTUuODI0N1pNNTU4LjkzMjgsNzguMzc1djExLjM1NzloNy45ODI0ODYyNDk1djExLjI2OTRjLjAyNDE5OTk5OTQsMS4wMDY0LS4wMzA1OTk5OTkyLDIuMDkyMi0uMjAzOTk5OTk0OCwyLjk2MTktLjMxNjA5OTk5MiwyLjEwMTMtMi4zMTM4OTk5NDE1LDUuNjgwNC03Ljk3OTI5OTc5ODQsNS42ODA0LTUuNjMxNzk5ODU3NywwLTcuNTkzMTg2NDU2Mi0zLjU3OTEtNy45MzM1OTk3OTk2LTUuNjgwNC0uMTQyODk5OTk2NC0uODY5Ny0uMjAzODk5OTk0OC0xLjk1NTUtLjIwMzg5OTk5NDgtMi45NjE5di0zNS41OTM4YzAtMS4yNTkuMDg1MzEzMzM4Mi0yLjYzNjMuMzUyNzk5OTkxMS0zLjY3OTQuMzg2MDk5OTkwMi0xLjg5NzYsMi4wNjc4OTk5NDc4LTUuNjM4LDcuNzQyMjk5ODA0NC01LjYzOCw1Ljk1Njg5OTg0OTUsMCw3LjQ0NDA5OTgxMTksMy45NDQsNy43ODQ2OTk4MDMzLDUuNjM4LjIyNDc5OTk5NDMsMS4xMjE5LjIzNjk5OTk5NCwzLjAwNDMuMjM2OTk5OTk0LDMuMDA0M3Y0LjMyMTFoMTkuNjEzOTk5NTA0NXYtMi41NTQzcy4wODgwOTk5OTc4LTIuNjY2Ny0uMTQ5MDk5OTk2Mi01LjE1NDRjLTEuNDc0Nzk5OTYyNy0xNC42MDg1LTEzLjUxMDg5OTY1ODctMTkuMjMwNC0yNy4zMTMzODU3NjI5LTE5LjIzMDQtMTMuODI2OTEzMTk3OCwwLTI1LjYxOTUxMjg5OTksNC42NjQ2LTI3LjMzNzcxMjg1NjUsMTkuMjMwNC0uMTU1MDk5OTk2MSwxLjMzMjEtLjM5MjM5OTk5MDEsMy43MjgyLS4zOTIzOTk5OTAxLDUuMTU0NHYzMi43NDE1YzAsMS40MjYyLjA0NTc5OTk5ODgsMi41My4zMTA0OTk5OTIyLDUuMTM2MSwxLjI4MDA5OTk2NzcsMTQuMjA3LDEzLjU5MjY5OTY1NjYsMTkuMjQyOCwyNy4zNjQ3OTkzMDg3LDE5LjI0MjgsMTMuODU3Mjk5NjQ5OSwwLDI2LjA4NDg5OTM0MS01LjAzNTgsMjcuMzg2NDk5MzA4Mi0xOS4yNDI4LjIzMTA5OTk5NDItMi42MDYxLjI1NTM5OTk5MzUtMy43MDk5LjI4NTg5OTk5MjgtNS4xMzYxdi0yMC44NjY3aC0yNy41NDc1ODU3NTUyWiIvPgogICAgPC9nPgogIDwvZz4KPC9zdmc+"
+
+--*** Reserved design-time functions ***
+function GetColor(props)
+  return SamsungBlue
+end
+
+function GetPrettyName(props)
+  return "Samsung ExLink " .. PluginInfo.Version
+end
+
+function GetProperties()
+  return {
+    {
+      Name = "Connection Type",
+      Type = "enum",
+      Choices = { "Serial", "TCP" },
+      Value = "Serial",
+    },
+    {
+      Name = "TCP Address",
+      Type = "string",
+      Value = "",
+    },
+    {
+      Name = "TCP Port",
+      Type = "integer",
+      Min = 1,
+      Max = 65535,
+      Value = 1515,
+    },
+    {
+      Name = "Baud Rate",
+      Type = "enum",
+      Choices = { "9600", "19200", "38400", "57600", "115200" },
+      Value = "9600",
+    },
+    {
+      Name = "Reply Handling",
+      Type = "enum",
+      Choices = { "Monitor only", "Wait for success" },
+      Value = "Monitor only",
+    },
+    {
+      Name = "Command Interval",
+      Type = "double",
+      Min = 0.1,
+      Max = 5,
+      Value = 0.3,
+    },
+    {
+      Name = "Power On Delay",
+      Type = "double",
+      Min = 1,
+      Max = 60,
+      Value = 5,
+    },
+    {
+      Name = "Reply Timeout",
+      Type = "double",
+      Min = 0.5,
+      Max = 30,
+      Value = 2,
+    },
+    {
+      Name = "Debug Print",
+      Type = "enum",
+      Choices = { "None", "Tx", "Rx", "Tx/Rx", "Function Calls", "All" },
+      Value = "None",
+    },
+  }
+end
+
+function RectifyProperties(props)
+  local useTcp = props["Connection Type"].Value == "TCP"
+  props["Baud Rate"].IsHidden = useTcp
+  props["TCP Address"].IsHidden = not useTcp
+  props["TCP Port"].IsHidden = not useTcp
+  props["Reply Timeout"].IsHidden = props["Reply Handling"].Value ~= "Wait for success"
+  if props.plugin_show_debug then
+    props["Debug Print"].IsHidden = not props.plugin_show_debug.Value
+  end
+  return props
+end
+
+function GetPages(props)
+  return { { name = "Setup" }, { name = "Controls" }, { name = "Remote" } }
+end
+
+function GetPins(props)
+  if props["Connection Type"].Value == "TCP" then
+    return {}
+  end
+  return {
+    {
+      Name = "Serial",
+      Direction = "input",
+      Domain = "serial",
+    },
+  }
+end
+
+function GetControls(props)
+  return {
+    {
+      Name = "PowerOn",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "PowerOff",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "PowerToggle",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "VolumeUp",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "VolumeDown",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "MuteToggle",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Hdmi1",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Hdmi2",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Hdmi3",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Hdmi4",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "ArtOn",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "ArtOff",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "AmbientOn",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "AmbientOff",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "ChannelUp",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "ChannelDown",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyUp",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyDown",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyLeft",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyRight",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyEnter",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyHome",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeySmartHub",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyMenu",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyReturn",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyExit",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyPlay",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyPause",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyStop",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyRed",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyGreen",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyYellow",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeyBlue",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Digit0",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Digit1",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Digit2",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Digit3",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Digit4",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Digit5",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Digit6",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Digit7",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Digit8",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Digit9",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "SendInput",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "SendKey",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "ApplyPicture",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "ApplySound",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Reconnect",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "ClearQueue",
+      ControlType = "Button",
+      ButtonType = "Trigger",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "InputSelect",
+      ControlType = "Text",
+      DefaultValue = "HDMI 1",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "KeySelect",
+      ControlType = "Text",
+      DefaultValue = "Info",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "PictureMode",
+      ControlType = "Text",
+      DefaultValue = "Standard",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "SoundMode",
+      ControlType = "Text",
+      DefaultValue = "Standard",
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "VolumeSet",
+      ControlType = "Knob",
+      ControlUnit = "Integer",
+      Min = 0,
+      Max = 100,
+      DefaultValue = 20,
+      UserPin = true,
+      PinStyle = "Input",
+    },
+    {
+      Name = "Status",
+      ControlType = "Indicator",
+      IndicatorType = "Status",
+      UserPin = true,
+      PinStyle = "Output",
+    },
+    {
+      Name = "SerialOpen",
+      ControlType = "Indicator",
+      IndicatorType = "Led",
+      UserPin = true,
+      PinStyle = "Output",
+    },
+    {
+      Name = "TCPConnected",
+      ControlType = "Indicator",
+      IndicatorType = "Led",
+      UserPin = true,
+      PinStyle = "Output",
+    },
+    {
+      Name = "Busy",
+      ControlType = "Indicator",
+      IndicatorType = "Led",
+      UserPin = true,
+      PinStyle = "Output",
+    },
+    {
+      Name = "LastCommand",
+      ControlType = "Indicator",
+      IndicatorType = "Text",
+      UserPin = true,
+      PinStyle = "Output",
+    },
+    {
+      Name = "LastTx",
+      ControlType = "Indicator",
+      IndicatorType = "Text",
+      UserPin = true,
+      PinStyle = "Output",
+    },
+    {
+      Name = "LastRx",
+      ControlType = "Indicator",
+      IndicatorType = "Text",
+      UserPin = true,
+      PinStyle = "Output",
+    },
+    {
+      Name = "LastResponse",
+      ControlType = "Indicator",
+      IndicatorType = "Text",
+      UserPin = true,
+      PinStyle = "Output",
+    },
+    {
+      Name = "QueueDepth",
+      ControlType = "Indicator",
+      IndicatorType = "Text",
+      UserPin = true,
+      PinStyle = "Output",
+    },
+    {
+      Name = "SuccessCount",
+      ControlType = "Indicator",
+      IndicatorType = "Text",
+      UserPin = true,
+      PinStyle = "Output",
+    },
+    {
+      Name = "Configuration",
+      ControlType = "Indicator",
+      IndicatorType = "Text",
+      UserPin = true,
+      PinStyle = "Output",
+    },
+  }
+end
+
+-- Stable exposed pin names, including controls on other native pages.
+ControlPinNames = {
+  PowerOn = "Power~Power On",
+  PowerOff = "Power~Power Off",
+  PowerToggle = "Power~Power Toggle",
+  VolumeUp = "Audio~Volume Up",
+  VolumeDown = "Audio~Volume Down",
+  MuteToggle = "Audio~Mute Toggle",
+  Hdmi1 = "Input~HDMI 1",
+  Hdmi2 = "Input~HDMI 2",
+  Hdmi3 = "Input~HDMI 3",
+  Hdmi4 = "Input~HDMI 4",
+  ArtOn = "Frame~Art Mode On",
+  ArtOff = "Frame~Art Mode Off",
+  AmbientOn = "Frame~Ambient Mode On",
+  AmbientOff = "Frame~Ambient Mode Off",
+  ChannelUp = "Remote~Channel Up",
+  ChannelDown = "Remote~Channel Down",
+  KeyUp = "Remote~Up",
+  KeyDown = "Remote~Down",
+  KeyLeft = "Remote~Left",
+  KeyRight = "Remote~Right",
+  KeyEnter = "Remote~Enter",
+  KeyHome = "Remote~Home",
+  KeySmartHub = "Remote~Smart Hub",
+  KeyMenu = "Remote~Menu",
+  KeyReturn = "Remote~Return",
+  KeyExit = "Remote~Exit",
+  KeyPlay = "Remote~Play",
+  KeyPause = "Remote~Pause",
+  KeyStop = "Remote~Stop",
+  KeyRed = "Remote~Red",
+  KeyGreen = "Remote~Green",
+  KeyYellow = "Remote~Yellow",
+  KeyBlue = "Remote~Blue",
+  Digit0 = "Remote~Digits~0",
+  Digit1 = "Remote~Digits~1",
+  Digit2 = "Remote~Digits~2",
+  Digit3 = "Remote~Digits~3",
+  Digit4 = "Remote~Digits~4",
+  Digit5 = "Remote~Digits~5",
+  Digit6 = "Remote~Digits~6",
+  Digit7 = "Remote~Digits~7",
+  Digit8 = "Remote~Digits~8",
+  Digit9 = "Remote~Digits~9",
+  SendInput = "Input~Send Selected Input",
+  SendKey = "Remote~Send Selected Key",
+  ApplyPicture = "Picture~Apply Mode",
+  ApplySound = "Audio~Apply Sound Mode",
+  Reconnect = "Setup~Reconnect",
+  ClearQueue = "Setup~Clear Queue",
+  InputSelect = "Input~Input Selection",
+  KeySelect = "Remote~Key Selection",
+  PictureMode = "Picture~Mode Selection",
+  SoundMode = "Audio~Sound Mode Selection",
+  VolumeSet = "Audio~Volume Set (Command)",
+  Status = "Diagnostics~Communication Status",
+  SerialOpen = "Diagnostics~Serial Port Open",
+  TCPConnected = "Diagnostics~TCP Connected",
+  Busy = "Diagnostics~Queue Busy",
+  LastCommand = "Diagnostics~Last Sent Command",
+  LastTx = "Diagnostics~Last Transmitted Bytes",
+  LastRx = "Diagnostics~Last Received Bytes",
+  LastResponse = "Diagnostics~Last Response",
+  QueueDepth = "Diagnostics~Queued Commands",
+  SuccessCount = "Diagnostics~Success Reply Count",
+  Configuration = "Setup~Configuration",
+}
+
+function GetControlLayout(props)
+  local page = props.page_index and props.page_index.Value or 1
+  local layout
+  local graphics
+  if page == 2 then
+    layout, graphics = GetControlPage()
+  elseif page == 3 then
+    layout, graphics = GetRemotePage()
+  else
+    layout, graphics = GetSetupPage(props)
+  end
+  for name, prettyName in pairs(ControlPinNames) do
+    if not layout[name] then
+      layout[name] = { Style = "None", Position = { 0, 0 }, Size = { 1, 1 }, ZOrder = 2000 }
+    end
+    layout[name].PrettyName = prettyName
+  end
+  return layout, graphics
+end
+
+--*** Direct native page definitions ***
+function GetSetupPage(props)
+  local useTcp = props["Connection Type"].Value == "TCP"
+  local layout = {
+    Configuration = {
+      Style = "Text",
+      Position = { 35, 187 },
+      Size = { 330, 40 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = ReadoutGray,
+      StrokeColor = OutlineGray,
+      StrokeWidth = 1,
+      HTextAlign = "Left",
+      WordWrap = true,
+      ZOrder = 1000,
+    },
+    Status = {
+      Style = "Text",
+      Position = { 50, 263 },
+      Size = { 300, 40 },
+      Font = "Roboto",
+      FontSize = 11,
+      StrokeColor = OutlineGray,
+      StrokeWidth = 1,
+      HTextAlign = "Left",
+      WordWrap = true,
+      ZOrder = 1001,
+    },
+    [useTcp and "TCPConnected" or "SerialOpen"] = {
+      Style = "Led",
+      Position = { 145, 314 },
+      Size = { 14, 14 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = IndicatorGreen,
+      ZOrder = 1002,
+    },
+    Busy = {
+      Style = "Led",
+      Position = { 345, 314 },
+      Size = { 14, 14 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = IndicatorGreen,
+      ZOrder = 1003,
+    },
+    Reconnect = {
+      Style = "Button",
+      Position = { 145, 342 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1004,
+    },
+    ClearQueue = {
+      Style = "Button",
+      Position = { 335, 342 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1005,
+    },
+    LastCommand = {
+      Style = "Text",
+      Position = { 145, 445 },
+      Size = { 225, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = ReadoutGray,
+      StrokeColor = OutlineGray,
+      StrokeWidth = 1,
+      HTextAlign = "Left",
+      ZOrder = 1006,
+    },
+    LastTx = {
+      Style = "Text",
+      Position = { 145, 470 },
+      Size = { 225, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = ReadoutGray,
+      StrokeColor = OutlineGray,
+      StrokeWidth = 1,
+      HTextAlign = "Left",
+      ZOrder = 1007,
+    },
+    LastRx = {
+      Style = "Text",
+      Position = { 145, 495 },
+      Size = { 225, 44 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = ReadoutGray,
+      StrokeColor = OutlineGray,
+      StrokeWidth = 1,
+      HTextAlign = "Left",
+      WordWrap = true,
+      ZOrder = 1008,
+    },
+    LastResponse = {
+      Style = "Text",
+      Position = { 145, 544 },
+      Size = { 225, 36 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = ReadoutGray,
+      StrokeColor = OutlineGray,
+      StrokeWidth = 1,
+      HTextAlign = "Left",
+      WordWrap = true,
+      ZOrder = 1009,
+    },
+    SuccessCount = {
+      Style = "Text",
+      Position = { 145, 590 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = ReadoutGray,
+      StrokeColor = OutlineGray,
+      StrokeWidth = 1,
+      HTextAlign = "Left",
+      ZOrder = 1010,
+    },
+    QueueDepth = {
+      Style = "Text",
+      Position = { 335, 590 },
+      Size = { 35, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = ReadoutGray,
+      StrokeColor = OutlineGray,
+      StrokeWidth = 1,
+      HTextAlign = "Left",
+      ZOrder = 1011,
+    },
+  }
+  local graphics = {
+    {
+      Type = "GroupBox",
+      Position = { 0, 0 },
+      Size = { 400, 690 },
+      Fill = White,
+      StrokeWidth = 0,
+      CornerRadius = 0,
+      ZOrder = 1,
+    },
+    {
+      Type = "GroupBox",
+      Position = { 0, 0 },
+      Size = { 400, 100 },
+      Fill = PanelGray,
+      StrokeWidth = 0,
+      CornerRadius = 0,
+      ZOrder = 2,
+    },
+    {
+      Type = "GroupBox",
+      Position = { 5, 130 },
+      Size = { 390, 240 },
+      Fill = PanelGray,
+      StrokeWidth = 0,
+      CornerRadius = 0,
+      ZOrder = 3,
+    },
+    {
+      Type = "GroupBox",
+      Position = { 5, 405 },
+      Size = { 390, 247 },
+      Fill = PanelGray,
+      StrokeWidth = 0,
+      CornerRadius = 0,
+      ZOrder = 4,
+    },
+    {
+      Type = "Svg",
+      Position = { 12.5, 0 },
+      Size = { 375, 99.61482737905934 },
+      Image = LogoSvg,
+      ZOrder = 5,
+    },
+    {
+      Type = "Label",
+      Position = { 7, 106 },
+      Size = { 380, 22 },
+      Text = "Setup",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 20,
+      HTextAlign = "Left",
+      FontStyle = "Medium",
+      ZOrder = 6,
+    },
+    {
+      Type = "Label",
+      Position = { 205, 668 },
+      Size = { 180, 16 },
+      Text = "Version " .. PluginInfo.Version,
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 10,
+      HTextAlign = "Right",
+      ZOrder = 7,
+    },
+    {
+      Type = "Header",
+      Position = { 35, 140 },
+      Size = { 330, 16 },
+      Text = "Connection Details",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 14,
+      HTextAlign = "Center",
+      ZOrder = 8,
+    },
+    {
+      Type = "Label",
+      Position = { 35, 164 },
+      Size = { 330, 18 },
+      Text = useTcp and "TCP Settings (Properties):" or "Serial Settings:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Left",
+      ZOrder = 9,
+    },
+    {
+      Type = "Header",
+      Position = { 35, 240 },
+      Size = { 330, 16 },
+      Text = "Connection Status",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 14,
+      HTextAlign = "Center",
+      ZOrder = 10,
+    },
+    {
+      Type = "Label",
+      Position = { 30, 312 },
+      Size = { 100, 20 },
+      Text = useTcp and "TCP Connected:" or "Port Open:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 11,
+    },
+    {
+      Type = "Label",
+      Position = { 220, 312 },
+      Size = { 110, 20 },
+      Text = "Queue Busy:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 12,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 342 },
+      Size = { 120, 20 },
+      Text = "Reconnect:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 13,
+    },
+    {
+      Type = "Label",
+      Position = { 220, 342 },
+      Size = { 110, 20 },
+      Text = "Clear Queue:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 14,
+    },
+    {
+      Type = "Label",
+      Position = { 7, 378 },
+      Size = { 380, 22 },
+      Text = "Diagnostics",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 20,
+      HTextAlign = "Left",
+      FontStyle = "Medium",
+      ZOrder = 15,
+    },
+    {
+      Type = "Header",
+      Position = { 35, 415 },
+      Size = { 330, 16 },
+      Text = "Communication",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 14,
+      HTextAlign = "Center",
+      ZOrder = 16,
+    },
+    {
+      Type = "Label",
+      Position = { 10, 445 },
+      Size = { 125, 20 },
+      Text = "Last Command:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 17,
+    },
+    {
+      Type = "Label",
+      Position = { 10, 470 },
+      Size = { 125, 20 },
+      Text = "Transmitted Hex:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 18,
+    },
+    {
+      Type = "Label",
+      Position = { 10, 495 },
+      Size = { 125, 20 },
+      Text = "Received Hex:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 19,
+    },
+    {
+      Type = "Label",
+      Position = { 10, 544 },
+      Size = { 125, 20 },
+      Text = "Last Response:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 20,
+    },
+    {
+      Type = "Label",
+      Position = { 10, 590 },
+      Size = { 125, 20 },
+      Text = "Success Replies:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 21,
+    },
+    {
+      Type = "Label",
+      Position = { 220, 590 },
+      Size = { 110, 20 },
+      Text = "Queued:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 22,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 624 },
+      Size = { 360, 18 },
+      Text = "Success replies do not report TV state.",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 11,
+      HTextAlign = "Left",
+      ZOrder = 23,
+    },
+  }
+  return layout, graphics
+end
+
+function GetControlPage()
+  local layout = {
+    PowerOn = {
+      Style = "Button",
+      Position = { 145, 165 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1000,
+    },
+    PowerOff = {
+      Style = "Button",
+      Position = { 335, 165 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1001,
+    },
+    PowerToggle = {
+      Style = "Button",
+      Position = { 145, 190 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1002,
+    },
+    ArtOn = {
+      Style = "Button",
+      Position = { 145, 250 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1003,
+    },
+    ArtOff = {
+      Style = "Button",
+      Position = { 335, 250 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1004,
+    },
+    AmbientOn = {
+      Style = "Button",
+      Position = { 145, 275 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1005,
+    },
+    AmbientOff = {
+      Style = "Button",
+      Position = { 335, 275 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1006,
+    },
+    VolumeSet = {
+      Style = "Fader",
+      Position = { 145, 333 },
+      Size = { 230, 24 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = OutlineGray,
+      ShowTextbox = true,
+      ZOrder = 1007,
+    },
+    VolumeDown = {
+      Style = "Button",
+      Position = { 145, 365 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1008,
+    },
+    VolumeUp = {
+      Style = "Button",
+      Position = { 335, 365 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1009,
+    },
+    MuteToggle = {
+      Style = "Button",
+      Position = { 145, 390 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1010,
+    },
+    Hdmi1 = {
+      Style = "Button",
+      Position = { 145, 450 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1011,
+    },
+    Hdmi2 = {
+      Style = "Button",
+      Position = { 335, 450 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1012,
+    },
+    Hdmi3 = {
+      Style = "Button",
+      Position = { 145, 475 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1013,
+    },
+    Hdmi4 = {
+      Style = "Button",
+      Position = { 335, 475 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1014,
+    },
+    InputSelect = {
+      Style = "ComboBox",
+      Position = { 125, 500 },
+      Size = { 190, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = White,
+      StrokeColor = Black,
+      StrokeWidth = 1,
+      HTextAlign = "Left",
+      ZOrder = 1015,
+    },
+    SendInput = {
+      Style = "Button",
+      Position = { 335, 500 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Send",
+      ZOrder = 1016,
+    },
+    PictureMode = {
+      Style = "ComboBox",
+      Position = { 125, 565 },
+      Size = { 190, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = White,
+      StrokeColor = Black,
+      StrokeWidth = 1,
+      HTextAlign = "Left",
+      ZOrder = 1017,
+    },
+    ApplyPicture = {
+      Style = "Button",
+      Position = { 335, 565 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Apply",
+      ZOrder = 1018,
+    },
+    SoundMode = {
+      Style = "ComboBox",
+      Position = { 125, 590 },
+      Size = { 190, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = White,
+      StrokeColor = Black,
+      StrokeWidth = 1,
+      HTextAlign = "Left",
+      ZOrder = 1019,
+    },
+    ApplySound = {
+      Style = "Button",
+      Position = { 335, 590 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Apply",
+      ZOrder = 1020,
+    },
+  }
+  local graphics = {
+    {
+      Type = "GroupBox",
+      Position = { 0, 0 },
+      Size = { 400, 680 },
+      Fill = White,
+      StrokeWidth = 0,
+      CornerRadius = 0,
+      ZOrder = 1,
+    },
+    {
+      Type = "GroupBox",
+      Position = { 0, 0 },
+      Size = { 400, 100 },
+      Fill = PanelGray,
+      StrokeWidth = 0,
+      CornerRadius = 0,
+      ZOrder = 2,
+    },
+    {
+      Type = "GroupBox",
+      Position = { 5, 130 },
+      Size = { 390, 522 },
+      Fill = PanelGray,
+      StrokeWidth = 0,
+      CornerRadius = 0,
+      ZOrder = 3,
+    },
+    {
+      Type = "Svg",
+      Position = { 12.5, 0 },
+      Size = { 375, 99.61482737905934 },
+      Image = LogoSvg,
+      ZOrder = 4,
+    },
+    {
+      Type = "Label",
+      Position = { 7, 106 },
+      Size = { 380, 22 },
+      Text = "Controls",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 20,
+      HTextAlign = "Left",
+      FontStyle = "Medium",
+      ZOrder = 5,
+    },
+    {
+      Type = "Label",
+      Position = { 205, 658 },
+      Size = { 180, 16 },
+      Text = "Version " .. PluginInfo.Version,
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 10,
+      HTextAlign = "Right",
+      ZOrder = 6,
+    },
+    {
+      Type = "Header",
+      Position = { 35, 140 },
+      Size = { 330, 16 },
+      Text = "Power",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 14,
+      HTextAlign = "Center",
+      ZOrder = 7,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 165 },
+      Size = { 120, 20 },
+      Text = "Power On:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 8,
+    },
+    {
+      Type = "Label",
+      Position = { 220, 165 },
+      Size = { 110, 20 },
+      Text = "Power Off:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 9,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 190 },
+      Size = { 120, 20 },
+      Text = "Power Toggle:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 10,
+    },
+    {
+      Type = "Header",
+      Position = { 35, 225 },
+      Size = { 330, 16 },
+      Text = "Frame / Ambient",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 14,
+      HTextAlign = "Center",
+      ZOrder = 11,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 250 },
+      Size = { 120, 20 },
+      Text = "Art On:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 12,
+    },
+    {
+      Type = "Label",
+      Position = { 220, 250 },
+      Size = { 110, 20 },
+      Text = "Art Off:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 13,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 275 },
+      Size = { 120, 20 },
+      Text = "Ambient On:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 14,
+    },
+    {
+      Type = "Label",
+      Position = { 220, 275 },
+      Size = { 110, 20 },
+      Text = "Ambient Off:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 15,
+    },
+    {
+      Type = "Header",
+      Position = { 35, 310 },
+      Size = { 330, 16 },
+      Text = "Audio",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 14,
+      HTextAlign = "Center",
+      ZOrder = 16,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 335 },
+      Size = { 120, 20 },
+      Text = "Volume (0-100):",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 17,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 365 },
+      Size = { 120, 20 },
+      Text = "Volume Down:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 18,
+    },
+    {
+      Type = "Label",
+      Position = { 220, 365 },
+      Size = { 110, 20 },
+      Text = "Volume Up:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 19,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 390 },
+      Size = { 120, 20 },
+      Text = "Mute Toggle:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 20,
+    },
+    {
+      Type = "Header",
+      Position = { 35, 425 },
+      Size = { 330, 16 },
+      Text = "Input",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 14,
+      HTextAlign = "Center",
+      ZOrder = 21,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 450 },
+      Size = { 120, 20 },
+      Text = "HDMI 1:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 22,
+    },
+    {
+      Type = "Label",
+      Position = { 220, 450 },
+      Size = { 110, 20 },
+      Text = "HDMI 2:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 23,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 475 },
+      Size = { 120, 20 },
+      Text = "HDMI 3:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 24,
+    },
+    {
+      Type = "Label",
+      Position = { 220, 475 },
+      Size = { 110, 20 },
+      Text = "HDMI 4:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 25,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 500 },
+      Size = { 95, 20 },
+      Text = "Input:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 26,
+    },
+    {
+      Type = "Header",
+      Position = { 35, 540 },
+      Size = { 330, 16 },
+      Text = "Picture / Sound",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 14,
+      HTextAlign = "Center",
+      ZOrder = 27,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 565 },
+      Size = { 95, 20 },
+      Text = "Picture:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 28,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 590 },
+      Size = { 95, 20 },
+      Text = "Sound:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 29,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 627 },
+      Size = { 360, 18 },
+      Text = "Commands only; TV state is not reported.",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 11,
+      HTextAlign = "Left",
+      ZOrder = 30,
+    },
+  }
+  return layout, graphics
+end
+
+function GetRemotePage()
+  local layout = {
+    KeyUp = {
+      Style = "Button",
+      Position = { 175, 165 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Up",
+      ZOrder = 1000,
+    },
+    KeyLeft = {
+      Style = "Button",
+      Position = { 115, 190 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Left",
+      ZOrder = 1001,
+    },
+    KeyEnter = {
+      Style = "Button",
+      Position = { 175, 190 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Enter",
+      ZOrder = 1002,
+    },
+    KeyRight = {
+      Style = "Button",
+      Position = { 235, 190 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Right",
+      ZOrder = 1003,
+    },
+    KeyDown = {
+      Style = "Button",
+      Position = { 175, 215 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Down",
+      ZOrder = 1004,
+    },
+    KeyHome = {
+      Style = "Button",
+      Position = { 45, 245 },
+      Size = { 90, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Home",
+      ZOrder = 1005,
+    },
+    KeySmartHub = {
+      Style = "Button",
+      Position = { 155, 245 },
+      Size = { 90, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Smart Hub",
+      ZOrder = 1006,
+    },
+    KeyMenu = {
+      Style = "Button",
+      Position = { 265, 245 },
+      Size = { 90, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Menu",
+      ZOrder = 1007,
+    },
+    KeyReturn = {
+      Style = "Button",
+      Position = { 100, 270 },
+      Size = { 90, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Return",
+      ZOrder = 1008,
+    },
+    KeyExit = {
+      Style = "Button",
+      Position = { 210, 270 },
+      Size = { 90, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Exit",
+      ZOrder = 1009,
+    },
+    ChannelDown = {
+      Style = "Button",
+      Position = { 145, 330 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1010,
+    },
+    ChannelUp = {
+      Style = "Button",
+      Position = { 335, 330 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      ZOrder = 1011,
+    },
+    Digit1 = {
+      Style = "Button",
+      Position = { 115, 365 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "1",
+      ZOrder = 1012,
+    },
+    Digit2 = {
+      Style = "Button",
+      Position = { 175, 365 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "2",
+      ZOrder = 1013,
+    },
+    Digit3 = {
+      Style = "Button",
+      Position = { 235, 365 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "3",
+      ZOrder = 1014,
+    },
+    Digit4 = {
+      Style = "Button",
+      Position = { 115, 390 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "4",
+      ZOrder = 1015,
+    },
+    Digit5 = {
+      Style = "Button",
+      Position = { 175, 390 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "5",
+      ZOrder = 1016,
+    },
+    Digit6 = {
+      Style = "Button",
+      Position = { 235, 390 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "6",
+      ZOrder = 1017,
+    },
+    Digit7 = {
+      Style = "Button",
+      Position = { 115, 415 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "7",
+      ZOrder = 1018,
+    },
+    Digit8 = {
+      Style = "Button",
+      Position = { 175, 415 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "8",
+      ZOrder = 1019,
+    },
+    Digit9 = {
+      Style = "Button",
+      Position = { 235, 415 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "9",
+      ZOrder = 1020,
+    },
+    Digit0 = {
+      Style = "Button",
+      Position = { 175, 440 },
+      Size = { 50, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "0",
+      ZOrder = 1021,
+    },
+    KeyPlay = {
+      Style = "Button",
+      Position = { 45, 505 },
+      Size = { 90, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Play",
+      ZOrder = 1022,
+    },
+    KeyPause = {
+      Style = "Button",
+      Position = { 155, 505 },
+      Size = { 90, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Pause",
+      ZOrder = 1023,
+    },
+    KeyStop = {
+      Style = "Button",
+      Position = { 265, 505 },
+      Size = { 90, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Stop",
+      ZOrder = 1024,
+    },
+    KeyRed = {
+      Style = "Button",
+      Position = { 35, 530 },
+      Size = { 75, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Red",
+      ZOrder = 1025,
+    },
+    KeyGreen = {
+      Style = "Button",
+      Position = { 120, 530 },
+      Size = { 75, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Green",
+      ZOrder = 1026,
+    },
+    KeyYellow = {
+      Style = "Button",
+      Position = { 205, 530 },
+      Size = { 75, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Yellow",
+      ZOrder = 1027,
+    },
+    KeyBlue = {
+      Style = "Button",
+      Position = { 290, 530 },
+      Size = { 75, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Blue",
+      ZOrder = 1028,
+    },
+    KeySelect = {
+      Style = "ComboBox",
+      Position = { 105, 595 },
+      Size = { 210, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      Color = White,
+      StrokeColor = Black,
+      StrokeWidth = 1,
+      HTextAlign = "Left",
+      ZOrder = 1029,
+    },
+    SendKey = {
+      Style = "Button",
+      Position = { 335, 595 },
+      Size = { 45, 20 },
+      Font = "Roboto",
+      FontSize = 11,
+      ButtonStyle = "Trigger",
+      Color = White,
+      CornerRadius = 2,
+      Margin = 2,
+      Legend = "Send",
+      ZOrder = 1030,
+    },
+  }
+  local graphics = {
+    {
+      Type = "GroupBox",
+      Position = { 0, 0 },
+      Size = { 400, 660 },
+      Fill = White,
+      StrokeWidth = 0,
+      CornerRadius = 0,
+      ZOrder = 1,
+    },
+    {
+      Type = "GroupBox",
+      Position = { 0, 0 },
+      Size = { 400, 100 },
+      Fill = PanelGray,
+      StrokeWidth = 0,
+      CornerRadius = 0,
+      ZOrder = 2,
+    },
+    {
+      Type = "GroupBox",
+      Position = { 5, 130 },
+      Size = { 390, 492 },
+      Fill = PanelGray,
+      StrokeWidth = 0,
+      CornerRadius = 0,
+      ZOrder = 3,
+    },
+    {
+      Type = "Svg",
+      Position = { 12.5, 0 },
+      Size = { 375, 99.61482737905934 },
+      Image = LogoSvg,
+      ZOrder = 4,
+    },
+    {
+      Type = "Label",
+      Position = { 7, 106 },
+      Size = { 380, 22 },
+      Text = "Remote",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 20,
+      HTextAlign = "Left",
+      FontStyle = "Medium",
+      ZOrder = 5,
+    },
+    {
+      Type = "Label",
+      Position = { 205, 638 },
+      Size = { 180, 16 },
+      Text = "Version " .. PluginInfo.Version,
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 10,
+      HTextAlign = "Right",
+      ZOrder = 6,
+    },
+    {
+      Type = "Header",
+      Position = { 35, 140 },
+      Size = { 330, 16 },
+      Text = "Navigation",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 14,
+      HTextAlign = "Center",
+      ZOrder = 7,
+    },
+    {
+      Type = "Header",
+      Position = { 35, 305 },
+      Size = { 330, 16 },
+      Text = "Channel / Keypad",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 14,
+      HTextAlign = "Center",
+      ZOrder = 8,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 330 },
+      Size = { 120, 20 },
+      Text = "Channel Down:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 9,
+    },
+    {
+      Type = "Label",
+      Position = { 220, 330 },
+      Size = { 110, 20 },
+      Text = "Channel Up:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 10,
+    },
+    {
+      Type = "Header",
+      Position = { 35, 480 },
+      Size = { 330, 16 },
+      Text = "Playback / Color Keys",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 14,
+      HTextAlign = "Center",
+      ZOrder = 11,
+    },
+    {
+      Type = "Header",
+      Position = { 35, 570 },
+      Size = { 330, 16 },
+      Text = "Other Remote Keys",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 14,
+      HTextAlign = "Center",
+      ZOrder = 12,
+    },
+    {
+      Type = "Label",
+      Position = { 20, 595 },
+      Size = { 75, 20 },
+      Text = "Key:",
+      Color = Black,
+      Font = "Roboto",
+      FontSize = 13,
+      HTextAlign = "Right",
+      ZOrder = 13,
+    },
+  }
+  return layout, graphics
+end
+
+--*** Runtime ***
+-- Host connection API used below; Open/Close/IsOpen are serial-only,
+-- Connect/Disconnect/IsConnected are TCP-only. UseTcp selects the valid API.
+---@class ExLinkConnection
+---@field IsOpen boolean
+---@field IsConnected boolean
+---@field BufferLength integer
+---@field Read fun(self: ExLinkConnection, count: integer): string|nil
+---@field Write fun(self: ExLinkConnection, data: string): string|nil
+---@field Open fun(self: ExLinkConnection, baud: integer, bits: integer, parity: string, stop: integer)
+---@field Close fun(self: ExLinkConnection)
+---@field Connect fun(self: ExLinkConnection, address: string, port: integer)
+---@field Disconnect fun(self: ExLinkConnection)
+---@field Connected fun(port: ExLinkConnection)
+---@field Data fun(port: ExLinkConnection)
+---@field Closed fun(port: ExLinkConnection)
+---@field Error fun(port: ExLinkConnection, err: string)
+---@field Timeout fun(port: ExLinkConnection)
+---@field Reconnect fun(port: ExLinkConnection)
+---@field ReadTimeout number
+---@field WriteTimeout number
+---@field ReconnectTimeout number
+if Controls then
+  --*** Runtime state ***
+  UseTcp = Properties["Connection Type"].Value == "TCP"
+  TransportName = UseTcp and "TCP" or "Serial"
+  ---@type ExLinkConnection|nil
+  Port = not UseTcp and SerialPorts and SerialPorts[1] or nil
+  TcpReady = false
+  TcpConnecting = false
+  Queue = {}
+  Pending = nil
+  RxBuffer = ""
+  Cooling = false
+  Faulted = false
+  Initializing = false
+  SuccessReplies = 0
+  --*** Host objects ***
+  GapTimer = Timer.New()
+  ReplyTimer = Timer.New()
+  FreshnessTimer = Timer.New()
+  OpenTimer = Timer.New()
+  ConnectTimer = Timer.New()
+  --*** Protocol and configuration constants ***
+  ProtocolHeader = { 0x08, 0x22 }
+  SuccessReply = string.char(0x03, 0x0C, 0xF1)
+  QueueLimit = 32
+  ReceiveDisplayLimit = 64
+  SuccessFreshness = 10
+  WaitForSuccess = Properties["Reply Handling"].Value == "Wait for success"
+  CommandInterval = Properties["Command Interval"].Value
+  PowerOnDelay = Properties["Power On Delay"].Value
+  ReplyTimeout = Properties["Reply Timeout"].Value
+  ConnectTimeout = 10
+
+  --*** Debug configuration ***
+  function SetupDebugPrint()
+    local selection = Properties["Debug Print"].Value
+    DebugAll = selection == "All"
+    DebugTx = DebugAll or selection == "Tx" or selection == "Tx/Rx"
+    DebugRx = DebugAll or selection == "Rx" or selection == "Tx/Rx"
+    DebugFunction = DebugAll or selection == "Function Calls"
+  end
+
+  function TraceFunction(name)
+    if DebugFunction then
+      print("ExLink function: " .. name)
+    end
+  end
+
+  --*** Runtime functions ***
+  function TransportReady()
+    if not Port then
+      return false
+    end
+    if UseTcp then
+      return TcpReady and Port.IsConnected == true
+    end
+    return Port.IsOpen == true
+  end
+
+  function SetStatus(value, message)
+    Controls.Status.Value = value
+    Controls.Status.String = message
+  end
+
+  function Hex(data)
+    local bytes = {}
+    for index = 1, #data do
+      bytes[index] = string.format("%02X", data:byte(index))
+    end
+    return table.concat(bytes, " ")
+  end
+
+  function Encode(command)
+    if type(command) ~= "table" or #command ~= 4 then
+      return nil
+    end
+    local sum = ProtocolHeader[1] + ProtocolHeader[2]
+    for _, value in ipairs(command) do
+      if type(value) ~= "number" or value ~= math.floor(value) or value < 0 or value > 255 then
+        return nil
+      end
+      sum = sum + value
+    end
+    return string.char(
+      ProtocolHeader[1],
+      ProtocolHeader[2],
+      command[1],
+      command[2],
+      command[3],
+      command[4],
+      -sum % 256
+    )
+  end
+
+  function UpdateQueue()
+    Controls.QueueDepth.String = tostring(#Queue)
+    Controls.Busy.Boolean = Pending ~= nil or Cooling or #Queue > 0
+    Controls.SerialOpen.Boolean = not UseTcp and Port ~= nil and Port.IsOpen == true
+    Controls.TCPConnected.Boolean = UseTcp and Port ~= nil and Port.IsConnected == true
+  end
+
+  function ResetTransactions()
+    TraceFunction("ResetTransactions")
+    Queue = {}
+    Pending = nil
+    RxBuffer = ""
+    Cooling = false
+    GapTimer:Stop()
+    ReplyTimer:Stop()
+    FreshnessTimer:Stop()
+    UpdateQueue()
+  end
+
+  function Fail(message)
+    TraceFunction("Fail")
+    TcpConnecting = false
+    ConnectTimer:Stop()
+    ResetTransactions()
+    Faulted = true
+    SetStatus(2, message .. "; reconnect to continue")
+    Controls.LastResponse.String = message
+    print("ExLink: " .. message)
+  end
+
+  function Pump()
+    TraceFunction("Pump")
+    if Initializing or Faulted or Cooling or Pending or #Queue == 0 then
+      UpdateQueue()
+      return
+    end
+    if not Port or not TransportReady() then
+      Fail(TransportName .. " connection unavailable")
+      return
+    end
+    local item = table.remove(Queue, 1)
+    -- Clear bytes received before this transmission; acknowledgements carry no command ID.
+    local readOk, readError = pcall(function()
+      if Port.BufferLength > 0 then
+        Port:Read(Port.BufferLength)
+      end
+    end)
+    if not readOk then
+      Fail(TransportName .. " read error: " .. tostring(readError))
+      return
+    end
+    RxBuffer = ""
+    Cooling = true
+    if WaitForSuccess then
+      Pending = item
+      ReplyTimer:Start(item.Wake and math.max(ReplyTimeout, PowerOnDelay) or ReplyTimeout)
+    end
+    GapTimer:Start(item.Wake and math.max(CommandInterval, PowerOnDelay) or CommandInterval)
+    local ok, err = pcall(function()
+      return Port:Write(item.Bytes)
+    end)
+    if not ok or err then
+      Fail(TransportName .. " write error: " .. tostring(err))
+      return
+    end
+    Controls.LastCommand.String = item.Label
+    Controls.LastTx.String = Hex(item.Bytes)
+    if DebugTx then
+      print("ExLink TX " .. Controls.LastTx.String .. " (" .. item.Label .. ")")
+    end
+    SetStatus(
+      3,
+      WaitForSuccess and "Sent; waiting for generic success reply" or "Sent; TV state unavailable"
+    )
+    UpdateQueue()
+  end
+
+  function Enqueue(label, command, wake, coalesce)
+    TraceFunction("Enqueue")
+    local bytes = Encode(command)
+    if not bytes then
+      Controls.LastResponse.String = "Invalid command rejected"
+      return
+    end
+    if Initializing or Faulted or not TransportReady() then
+      Controls.LastResponse.String = "Command not sent: "
+        .. TransportName
+        .. " not ready; reconnect if needed"
+      return
+    end
+    -- Coalesce only adjacent unsent volume targets; preserve power/input ordering.
+    if coalesce and #Queue > 0 and Queue[#Queue].Coalesce == coalesce then
+      Queue[#Queue] = { Label = label, Bytes = bytes, Wake = wake, Coalesce = coalesce }
+    elseif #Queue >= QueueLimit then
+      Controls.LastResponse.String = "Command not queued: queue is full (32)"
+      return
+    else
+      table.insert(Queue, { Label = label, Bytes = bytes, Wake = wake, Coalesce = coalesce })
+    end
+    Pump()
+  end
+
+  function SendKey(name)
+    TraceFunction("SendKey")
+    for _, key in ipairs(KeyDefinitions) do
+      if name == key[1] then
+        Enqueue("Key: " .. name, { 0x0D, 0, 0, key[2] })
+        return
+      end
+    end
+    Controls.LastResponse.String = "Unknown remote key; choose a listed key"
+  end
+
+  function Receive(port)
+    TraceFunction("Receive")
+    local ok, data = pcall(function()
+      if port.BufferLength == 0 then
+        return nil
+      end
+      return port:Read(port.BufferLength)
+    end)
+    if not ok then
+      Fail(TransportName .. " read error: " .. tostring(data))
+      return
+    end
+    if not data or #data == 0 then
+      return
+    end
+    Controls.LastRx.String = Hex(data:sub(-ReceiveDisplayLimit))
+    if DebugRx then
+      print("ExLink RX " .. Controls.LastRx.String)
+    end
+    -- Retain at most two partial bytes between callbacks, including on noisy streams.
+    local combined = RxBuffer .. data
+    local cursor = 1
+    local observed = false
+    while true do
+      local first, last = combined:find(SuccessReply, cursor, true)
+      if not first then
+        break
+      end
+      SuccessReplies = SuccessReplies + 1
+      observed = true
+      cursor = last + 1
+    end
+    RxBuffer = combined:sub(cursor):sub(-2)
+    if observed then
+      Controls.SuccessCount.String = tostring(SuccessReplies)
+      Controls.LastResponse.String = "Generic success reply observed; TV state unavailable"
+      if not Faulted and not Initializing then
+        Pending = nil
+        ReplyTimer:Stop()
+        SetStatus(0, "Success reply observed; TV state unavailable")
+        FreshnessTimer:Start(SuccessFreshness)
+      end
+    else
+      Controls.LastResponse.String = "Received bytes; no complete documented success reply"
+    end
+    -- Parse the entire callback before permitting the next queued transaction.
+    Pump()
+  end
+
+  function Connected()
+    TraceFunction("Connected")
+    if Initializing or (UseTcp and (not TcpConnecting or not Port or not Port.IsConnected)) then
+      return
+    end
+    ConnectTimer:Stop()
+    TcpConnecting = false
+    TcpReady = UseTcp
+    ResetTransactions()
+    Faulted = false
+    SetStatus(3, TransportName .. " ready; TV communication unverified")
+    print(UseTcp and "ExLink: TCP connected" or "ExLink: serial port open")
+  end
+
+  function BindTransportCallbacks()
+    if not Port then
+      return
+    end
+    Port.Connected = function(port)
+      if port == Port and not Initializing then
+        Connected()
+      end
+    end
+    Port.Data = function(port)
+      if port == Port and not Initializing then
+        Receive(port)
+      end
+    end
+    Port.Closed = function(port)
+      if port == Port and not Initializing then
+        ConnectTimer:Stop()
+        TcpReady = false
+        Fail(TransportName .. " connection closed")
+      end
+    end
+    Port.Error = function(port, err)
+      if port == Port and not Initializing then
+        ConnectTimer:Stop()
+        TcpReady = false
+        Fail(TransportName .. " error: " .. tostring(err))
+      end
+    end
+    Port.Timeout = function(port)
+      if port == Port and not Initializing then
+        ConnectTimer:Stop()
+        TcpReady = false
+        Fail(TransportName .. " transport timeout")
+      end
+    end
+    Port.Reconnect = function(port)
+      if port == Port and not Initializing then
+        TcpReady = false
+        Fail(TransportName .. " transport reconnecting")
+      end
+    end
+  end
+
+  function Initialize()
+    TraceFunction("Initialize")
+    Initializing = true
+    TcpReady = false
+    TcpConnecting = false
+    ResetTransactions()
+    Faulted = false
+    OpenTimer:Stop()
+    ConnectTimer:Stop()
+    -- Retire the previous TCP object before disconnecting so late callbacks
+    -- cannot clear a fault or affect a new connection attempt.
+    local previous = Port or (not UseTcp and SerialPorts and SerialPorts[1])
+    Port = nil
+    local ok, err = pcall(function()
+      if previous then
+        if UseTcp then
+          previous:Disconnect()
+        elseif previous.IsOpen then
+          previous:Close()
+        end
+      end
+    end)
+    if not ok then
+      Initializing = false
+      Fail(TransportName .. " close error: " .. tostring(err))
+      return
+    end
+    if UseTcp then
+      TcpAddress = Properties["TCP Address"].Value:match("^%s*(.-)%s*$")
+      TcpPort = Properties["TCP Port"].Value
+      Controls.Configuration.String = "TCP "
+        .. TcpAddress
+        .. ":"
+        .. tostring(TcpPort)
+        .. " | "
+        .. Properties["Reply Handling"].Value
+      if TcpAddress == "" or TcpAddress:find("%s") then
+        Initializing = false
+        SetStatus(1, "Enter a TCP address or hostname in Properties")
+        UpdateQueue()
+        return
+      end
+      if
+        type(TcpPort) ~= "number"
+        or TcpPort ~= math.floor(TcpPort)
+        or TcpPort < 1
+        or TcpPort > 65535
+      then
+        Initializing = false
+        SetStatus(1, "TCP port must be an integer from 1 to 65535")
+        UpdateQueue()
+        return
+      end
+      Port = TcpSocket.New()
+      Port.ReadTimeout = 0 -- No unsolicited data or polling is required.
+      Port.WriteTimeout = 0 -- Command-only traffic can remain idle indefinitely.
+      Port.ReconnectTimeout = 0 -- Explicit reconnect; never replay commands after a fault.
+    else
+      Port = SerialPorts and SerialPorts[1]
+    end
+    if not Port then
+      Initializing = false
+      SetStatus(3, "Wire Serial to a Q-SYS port; serial requires a Core")
+      return
+    end
+    BindTransportCallbacks()
+    SetStatus(5, "Opening " .. TransportName .. "; queued commands cleared")
+    -- Delay also allows virtual serial server connections to settle.
+    OpenTimer:Start(1)
+    UpdateQueue()
+  end
+
+  --*** Event handlers ***
+  GapTimer.EventHandler = function()
+    GapTimer:Stop()
+    Cooling = false
+    Pump()
+  end
+  ReplyTimer.EventHandler = function()
+    ReplyTimer:Stop()
+    if Pending then
+      Fail("No success reply; outcome unknown, queue cleared")
+    end
+  end
+  FreshnessTimer.EventHandler = function()
+    FreshnessTimer:Stop()
+    if not Faulted and not Initializing then
+      SetStatus(3, TransportName .. " ready; no recent success reply / no state polling")
+    end
+  end
+  OpenTimer.EventHandler = function()
+    OpenTimer:Stop()
+    Initializing = false
+    if not Port then
+      Fail(TransportName .. " connection unavailable")
+      return
+    end
+    local ok, err = pcall(function()
+      if UseTcp then
+        TcpConnecting = true
+        ConnectTimer:Start(ConnectTimeout)
+        Port:Connect(TcpAddress, TcpPort)
+      else
+        local baud = tonumber(Properties["Baud Rate"].Value)
+        if not baud then
+          error("Invalid baud rate")
+        end
+        Port:Open(math.floor(baud), 8, "N", 1)
+      end
+    end)
+    if not ok then
+      ConnectTimer:Stop()
+      Fail(TransportName .. " open error: " .. tostring(err))
+    elseif not UseTcp and Port.IsOpen then
+      Connected()
+    end
+  end
+  ConnectTimer.EventHandler = function()
+    ConnectTimer:Stop()
+    local previous = Port
+    Port = nil
+    TcpReady = false
+    if previous then
+      pcall(function()
+        previous:Disconnect()
+      end)
+    end
+    Fail("TCP connection timed out")
+  end
+  for _, command in ipairs(CommandDefinitions) do
+    Controls[command[1]].EventHandler = function()
+      Enqueue(command[2], command[4], command[5])
+    end
+  end
+  for _, key in ipairs(RemoteButtons) do
+    Controls["Key" .. key[1]].EventHandler = function()
+      SendKey(key[2])
+    end
+  end
+  for digit = 0, 9 do
+    Controls["Digit" .. digit].EventHandler = function()
+      SendKey(tostring(digit))
+    end
+  end
+  Controls.VolumeSet.EventHandler = function(control)
+    local value = control.Value
+    if type(value) ~= "number" or value ~= value or value < 0 or value > 100 then
+      Controls.LastResponse.String = "Volume rejected: use 0-100"
+      return
+    end
+    value = math.floor(value + 0.5)
+    Enqueue("Volume set: " .. value, { 0x01, 0, 0, value }, false, "Volume")
+  end
+  Controls.SendInput.EventHandler = function()
+    for _, input in ipairs(InputDefinitions) do
+      if input[1] == Controls.InputSelect.String then
+        Enqueue("Input: " .. input[1], { 0x0A, 0, input[2], input[3] })
+        return
+      end
+    end
+    Controls.LastResponse.String = "Unknown input; choose a listed input"
+  end
+  Controls.SendKey.EventHandler = function()
+    SendKey(Controls.KeySelect.String)
+  end
+  Controls.ApplyPicture.EventHandler = function()
+    for index, name in ipairs(PictureModes) do
+      if name == Controls.PictureMode.String then
+        Enqueue("Picture: " .. name, { 0x0B, 0, 0, index - 1 })
+        return
+      end
+    end
+    Controls.LastResponse.String = "Unknown picture mode"
+  end
+  Controls.ApplySound.EventHandler = function()
+    for index, name in ipairs(SoundModes) do
+      if name == Controls.SoundMode.String then
+        Enqueue("Sound: " .. name, { 0x0C, 0, 0, index })
+        return
+      end
+    end
+    Controls.LastResponse.String = "Unknown sound mode"
+  end
+  Controls.Reconnect.EventHandler = Initialize
+  Controls.ClearQueue.EventHandler = function()
+    Queue = {}
+    UpdateQueue()
+    Controls.LastResponse.String = "Unsent queue cleared; any transmitted command remains in flight"
+  end
+  --*** Initialization ***
+  InputChoices = {}
+  for _, input in ipairs(InputDefinitions) do
+    table.insert(InputChoices, input[1])
+  end
+  Controls.InputSelect.Choices = InputChoices
+  KeyChoices = {}
+  for _, key in ipairs(KeyDefinitions) do
+    table.insert(KeyChoices, key[1])
+  end
+  Controls.KeySelect.Choices = KeyChoices
+  Controls.PictureMode.Choices = PictureModes
+  Controls.SoundMode.Choices = SoundModes
+  Controls.LastCommand.String = "No command sent"
+  Controls.LastTx.String = ""
+  Controls.LastRx.String = ""
+  Controls.LastResponse.String = "No response observed"
+  Controls.SuccessCount.String = "0"
+  Controls.Configuration.String = Properties["Baud Rate"].Value
+    .. " 8N1 | "
+    .. Properties["Reply Handling"].Value
+    .. " | "
+    .. CommandInterval
+    .. "s spacing | "
+    .. PowerOnDelay
+    .. "s power delay"
+  SetupDebugPrint()
+  print("Samsung ExLink " .. PluginInfo.Version .. " starting")
+  Initialize()
+end

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>JoshuaSmall.Qsys.SamsungExLink</PackageId>
+    <Version>1.1.0</Version>
+    <Title>Samsung Consumer ExLink</Title>
+    <Authors>Joshua Small</Authors>
+    <Description>Samsung consumer TV ExLink control for Q-SYS, including Frame Art Mode. Serial or optional raw TCP.</Description>
+    <PackageProjectUrl>https://github.com/joshua-small/qsys-samsung-exlink</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/joshua-small/qsys-samsung-exlink</RepositoryUrl>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageIconUrl>https://joshua-small.github.io/qsys-samsung-exlink/icon.png</PackageIconUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>Q-SYS;Plugin;Samsung;ExLink</PackageTags>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <NoWarn>NU5128</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="content/SamsungExLink.qplug" Pack="true" PackagePath="content/" />
+    <None Include="icon.png" Pack="true" PackagePath="/" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>
