@@ -4,6 +4,8 @@ Control Samsung consumer TVs through ExLink, including power, volume, inputs,
 remote keys, and Frame Art Mode. Use a Q-SYS serial port or a raw TCP serial
 gateway. Target Designer/Core version: **10.5**.
 
+**Package 1.1.0.2** contains plugin **1.1.0.1**, including the connection-status corrections. The Samsung package icon is unchanged. Native Designer rendering, Core and physical-TV acceptance remain open.
+
 ## Install with Q-SYS Library
 
 1. Sign in to [Q-SYS Library](https://library.qsys.com/my-library).

@@ -2,8 +2,8 @@
 -- Based on Samsung-RS232-Control.pdf. No device-state queries are documented.
 PluginInfo = {
   Name = "Samsung~Consumer ExLink",
-  Version = "1.1.0.0",
-  BuildVersion = "1.1.0.0",
+  Version = "1.1.0.1",
+  BuildVersion = "1.1.0.1",
   Id = "053da5a0-922c-4d94-a662-5241818076d6",
   Author = "Joshua Small",
   Manufacturer = "Samsung",
@@ -121,6 +121,7 @@ PanelGray = { 230, 230, 230 }
 ReadoutGray = { 194, 194, 194 }
 OutlineGray = { 128, 128, 128 }
 IndicatorGreen = { 0, 160, 0 }
+IndicatorNeutral = { 128, 128, 128 }
 PageWidth = 400
 PageHeights = { 690, 680, 660 }
 SamsungBlue = { 20, 40, 160 }
@@ -823,7 +824,7 @@ function GetSetupPage(props)
       Size = { 14, 14 },
       Font = "Roboto",
       FontSize = 11,
-      Color = IndicatorGreen,
+      Color = IndicatorNeutral,
       ZOrder = 1003,
     },
     Reconnect = {
@@ -2670,7 +2671,7 @@ if Controls then
         .. Properties["Reply Handling"].Value
       if TcpAddress == "" or TcpAddress:find("%s") then
         Initializing = false
-        SetStatus(1, "Enter a TCP address or hostname in Properties")
+        SetStatus(2, "Enter a TCP address or hostname in Properties")
         UpdateQueue()
         return
       end
@@ -2681,7 +2682,7 @@ if Controls then
         or TcpPort > 65535
       then
         Initializing = false
-        SetStatus(1, "TCP port must be an integer from 1 to 65535")
+        SetStatus(2, "TCP port must be an integer from 1 to 65535")
         UpdateQueue()
         return
       end
