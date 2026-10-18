@@ -2,8 +2,8 @@
 -- Based on Samsung-RS232-Control.pdf. No device-state queries are documented.
 PluginInfo = {
   Name = "Samsung~Consumer ExLink",
-  Version = "1.1.0.1",
-  BuildVersion = "1.1.0.1",
+  Version = "1.1.0.3",
+  BuildVersion = "1.1.0.3",
   Id = "053da5a0-922c-4d94-a662-5241818076d6",
   Author = "Joshua Small",
   Manufacturer = "Samsung",
