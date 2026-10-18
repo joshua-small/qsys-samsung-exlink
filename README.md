@@ -94,3 +94,7 @@ not update running Cores automatically.
 Independent plugin; not endorsed by Samsung or Q-SYS. For help or bug reports,
 [open an issue](https://github.com/joshua-small/qsys-samsung-exlink/issues) with
 your TV model, firmware, Designer version, connection type, and observed result.
+
+### Offline package checks
+
+Run `python3 scripts/verify.py` and `python3 -m unittest discover -s tests -p test_package_identity.py`. Before a release, run `python3 scripts/verify.py --release-tag v<VERSION>`. The exact tag, project package version and `PluginInfo.Version` must agree. `BuildVersion` is a separate optional SDK field. These checks do not establish Designer or hardware acceptance.
