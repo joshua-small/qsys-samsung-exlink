@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>JoshuaSmall.Qsys.SamsungExLink</id>
+    <version>1.1.0.3</version>
+    <title>Samsung Consumer ExLink</title>
+    <authors>Joshua Small</authors>
+    <icon>icon.png</icon>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/joshua-small/qsys-samsung-exlink</projectUrl>
+    <iconUrl>https://joshua-small.github.io/qsys-samsung-exlink/icon.png</iconUrl>
+    <description>Samsung consumer TV ExLink control for Q-SYS, including Frame Art Mode. Serial or optional raw TCP.</description>
+    <tags>Q-SYS Plugin Samsung ExLink</tags>
+    <repository type="git" url="https://github.com/joshua-small/qsys-samsung-exlink" />
+  </metadata>
+</package>
